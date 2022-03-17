@@ -21,7 +21,7 @@ class DatabaseUpdateDiffViewerController extends ControllerBase {
   /**
    * Entity definition update manager service.
    *
-   * @var \Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface $entityDefinitionUpdateManager
+   * @var \Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface
    */
   protected EntityDefinitionUpdateManagerInterface $entityDefinitionUpdateManager;
 
@@ -53,10 +53,12 @@ class DatabaseUpdateDiffViewerController extends ControllerBase {
    *   Entity Definition Update Manager service.
    * @param \Drupal\Core\Diff\DiffFormatter $diffFormatter
    *   Diff formatter service.
-   * @param EntityLastInstalledSchemaRepositoryInterface $entityLastInstalledSchemaRepository
+   * @param \Drupal\Core\Entity\EntityLastInstalledSchemaRepositoryInterface $entityLastInstalledSchemaRepository
    *   Entity last installed schema repository service.
-   * @param EntityFieldManagerInterface $entityFieldManager
+   * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entityFieldManager
    *   Entity field manager service.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
+   *   Entity type manager service.
    */
   public function __construct(EntityDefinitionUpdateManagerInterface $entityDefinitionUpdateManager, DiffFormatter $diffFormatter, EntityLastInstalledSchemaRepositoryInterface $entityLastInstalledSchemaRepository, EntityFieldManagerInterface $entityFieldManager, EntityTypeManagerInterface $entityTypeManager) {
     $this->entityDefinitionUpdateManager = $entityDefinitionUpdateManager;
@@ -107,21 +109,24 @@ class DatabaseUpdateDiffViewerController extends ControllerBase {
         $entity_type = $this->entityTypeManager->getDefinition($entity_type_id);
         foreach ($fields as $field_name => $field) {
           $link = Link::createFromRoute('Diff', 'db_update_diff_viewer.diff', [
-              'entity_type_id' => $entity_type_id,
-              'type' => 'field_storage_definitions',
-              'field_name' => $field_name
+            'entity_type_id' => $entity_type_id,
+            'type' => 'field_storage_definitions',
+            'field_name' => $field_name,
+          ],
+          [
+            'attributes' => [
+              'class' => ['use-ajax'],
+              'data-dialog-type' => 'modal',
+              'data-dialog-options' => json_encode([
+                'width' => 700,
+              ]),
             ],
-            [
-              'attributes' => [
-                'class' => ['use-ajax'],
-                'data-dialog-type' => 'modal',
-                'data-dialog-options' => json_encode([
-                  'width' => 700,
-                ]),
-              ],
-            ]
-          );
-          $rows[] = [$entity_type->getLabel(), "field_storage_definition:{$field_name}", $link];
+          ]);
+          $rows[] = [
+            $entity_type->getLabel(),
+            "field_storage_definition:{$field_name}",
+            $link,
+          ];
         }
       }
     }
@@ -142,10 +147,9 @@ class DatabaseUpdateDiffViewerController extends ControllerBase {
    * @param string $entity_type_id
    *   Entity type id for which we are checking the difference.
    * @param string $type
-   *   Difference type. Typically, "field_storage_definitions"
+   *   Difference type. Typically, "field_storage_definitions".
    * @param string $field_name
    *   Field name.
-   *
    */
   public function diff(string $entity_type_id, string $type, string $field_name) {
 

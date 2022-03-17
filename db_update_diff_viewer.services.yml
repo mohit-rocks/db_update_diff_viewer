@@ -1,7 +1,0 @@
-services:
-  db_update_diff_viewer.entity_definition_update_manager:
-    class: Drupal\db_update_diff_viewer\Entity\EntityDefinitionUpdateManagerDecorator
-    public: false
-    decorates: entity.definition_update_manager
-    decoration_priority: 1
-    arguments: ['@entity_type.manager', '@entity.last_installed_schema.repository', '@entity_field.manager', '@entity_type.listener', '@field_storage_definition.listener', '@db_update_diff_viewer.entity_definition_update_manager.inner']
