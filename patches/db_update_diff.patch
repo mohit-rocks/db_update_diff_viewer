@@ -1,0 +1,143 @@
+diff --git a/core/lib/Drupal/Core/Entity/Schema/DynamicallyFieldableEntityStorageSchemaInterface.php b/core/lib/Drupal/Core/Entity/Schema/DynamicallyFieldableEntityStorageSchemaInterface.php
+index 807db45e7e..6a3d24918b 100644
+--- a/core/lib/Drupal/Core/Entity/Schema/DynamicallyFieldableEntityStorageSchemaInterface.php
++++ b/core/lib/Drupal/Core/Entity/Schema/DynamicallyFieldableEntityStorageSchemaInterface.php
+@@ -29,6 +29,19 @@ interface DynamicallyFieldableEntityStorageSchemaInterface extends EntityStorage
+    */
+   public function requiresFieldStorageSchemaChanges(FieldStorageDefinitionInterface $storage_definition, FieldStorageDefinitionInterface $original);
+ 
++  /**
++   * Get the difference of original and current storage schema changes.
++   *
++   * @param \Drupal\Core\Field\FieldStorageDefinitionInterface $storage_definition
++   *   The updated field storage definition.
++   * @param \Drupal\Core\Field\FieldStorageDefinitionInterface $original
++   *   The original field storage definition.
++   *
++   * @return \Drupal\Component\Diff\Diff
++   *   TRUE if storage schema changes are required, FALSE otherwise.
++   */
++  public function getFieldStorageSchemaChanges(FieldStorageDefinitionInterface $storage_definition, FieldStorageDefinitionInterface $original);
++
+   /**
+    * Checks if existing data would be lost if the schema changes were applied.
+    *
+diff --git a/core/lib/Drupal/Core/Entity/Schema/EntityStorageSchemaInterface.php b/core/lib/Drupal/Core/Entity/Schema/EntityStorageSchemaInterface.php
+index 4feab7b62e..da1549bc41 100644
+--- a/core/lib/Drupal/Core/Entity/Schema/EntityStorageSchemaInterface.php
++++ b/core/lib/Drupal/Core/Entity/Schema/EntityStorageSchemaInterface.php
+@@ -33,6 +33,19 @@ interface EntityStorageSchemaInterface extends EntityTypeListenerInterface {
+    */
+   public function requiresEntityStorageSchemaChanges(EntityTypeInterface $entity_type, EntityTypeInterface $original);
+ 
++  /**
++   * Get the difference of original and current entity storage schema changes.
++   *
++   * @param \Drupal\Core\Entity\EntityTypeInterface $entity_type
++   *   The updated entity type definition.
++   * @param \Drupal\Core\Entity\EntityTypeInterface $original
++   *   The original entity type definition.
++   *
++   * @return \Drupal\Component\Diff\Diff
++   *   TRUE if storage schema changes are required, FALSE otherwise.
++   */
++  public function getEntityStorageSchemaChanges(EntityTypeInterface $entity_type, EntityTypeInterface $original);
++
+   /**
+    * Checks if existing data would be lost if the schema changes were applied.
+    *
+diff --git a/core/lib/Drupal/Core/Entity/Sql/SqlContentEntityStorage.php b/core/lib/Drupal/Core/Entity/Sql/SqlContentEntityStorage.php
+index 289d2a9934..a74737d2fa 100644
+--- a/core/lib/Drupal/Core/Entity/Sql/SqlContentEntityStorage.php
++++ b/core/lib/Drupal/Core/Entity/Sql/SqlContentEntityStorage.php
+@@ -1448,6 +1448,13 @@ public function requiresEntityStorageSchemaChanges(EntityTypeInterface $entity_t
+     return $this->getStorageSchema()->requiresEntityStorageSchemaChanges($entity_type, $original);
+   }
+ 
++  /**
++   * {@inheritdoc}
++   */
++  public function getEntityStorageSchemaChanges(EntityTypeInterface $entity_type, EntityTypeInterface $original) {
++    return $this->getStorageSchema()->getEntityStorageSchemaChanges($entity_type, $original);
++  }
++
+   /**
+    * {@inheritdoc}
+    */
+@@ -1455,6 +1462,13 @@ public function requiresFieldStorageSchemaChanges(FieldStorageDefinitionInterfac
+     return $this->getStorageSchema()->requiresFieldStorageSchemaChanges($storage_definition, $original);
+   }
+ 
++  /**
++   * {@inheritdoc}
++   */
++  public function getFieldStorageSchemaChanges(FieldStorageDefinitionInterface $storage_definition, FieldStorageDefinitionInterface $original) {
++    return $this->getStorageSchema()->getFieldStorageSchemaChanges($storage_definition, $original);
++  }
++
+   /**
+    * {@inheritdoc}
+    */
+diff --git a/core/lib/Drupal/Core/Entity/Sql/SqlContentEntityStorageSchema.php b/core/lib/Drupal/Core/Entity/Sql/SqlContentEntityStorageSchema.php
+index 46e96c9a88..20910085ec 100644
+--- a/core/lib/Drupal/Core/Entity/Sql/SqlContentEntityStorageSchema.php
++++ b/core/lib/Drupal/Core/Entity/Sql/SqlContentEntityStorageSchema.php
+@@ -211,6 +211,16 @@ public function requiresEntityStorageSchemaChanges(EntityTypeInterface $entity_t
+       $this->getEntitySchemaData($entity_type, $this->getEntitySchema($entity_type, TRUE)) != $this->loadEntitySchemaData($original);
+   }
+ 
++  /**
++   * {@inheritdoc}
++   */
++  public function getEntityStorageSchemaChanges(EntityTypeInterface $entity_type, EntityTypeInterface $original) {
++    $original = explode("\n", Yaml::encode($this->loadEntitySchemaData($original)));
++    $target = explode("\n", Yaml::encode($this->getEntitySchemaData($entity_type, $this->getEntitySchema($entity_type, TRUE))));
++
++    return new Diff($original, $target);
++  }
++
+   /**
+    * Detects whether there is a change in the shared table structure.
+    *
+@@ -287,6 +297,41 @@ public function requiresFieldStorageSchemaChanges(FieldStorageDefinitionInterfac
+     return $current_schema != $installed_schema;
+   }
+ 
++  /**
++   * {@inheritdoc}
++   */
++  public function getFieldStorageSchemaChanges(FieldStorageDefinitionInterface $storage_definition, FieldStorageDefinitionInterface $original) {
++    $table_mapping = $this->getTableMapping($this->entityType);
++
++    if (
++      $storage_definition->hasCustomStorage() != $original->hasCustomStorage() ||
++      $storage_definition->getSchema() != $original->getSchema() ||
++      $storage_definition->isRevisionable() != $original->isRevisionable() ||
++      $table_mapping->allowsSharedTableStorage($storage_definition) != $table_mapping->allowsSharedTableStorage($original) ||
++      $table_mapping->requiresDedicatedTableStorage($storage_definition) != $table_mapping->requiresDedicatedTableStorage($original)
++    ) {
++      return TRUE;
++    }
++
++    if ($storage_definition->hasCustomStorage()) {
++      // The field has custom storage, so we don't know if a schema change is
++      // needed or not, but since per the initial checks earlier in this
++      // function, nothing about the definition changed that we manage, we
++      // return FALSE.
++      return FALSE;
++    }
++
++    $current_schema = $this->getSchemaFromStorageDefinition($storage_definition);
++    $this->processFieldStorageSchema($current_schema);
++    $installed_schema = $this->loadFieldSchemaData($original);
++    $this->processFieldStorageSchema($installed_schema);
++
++    $source_data = explode("\n", Yaml::encode($current_schema));
++    $target_data = explode("\n", Yaml::encode($installed_schema));
++
++    return new Diff($source_data, $target_data);
++  }
++
+   /**
+    * Gets the schema data for the given field storage definition.
+    *
