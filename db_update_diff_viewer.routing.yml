@@ -1,0 +1,18 @@
+db_update_diff_viewer.diff_list:
+  path: '/admin/reports/db-updates-diff'
+  defaults:
+    _title: 'Pending Database Updates'
+    _controller: '\Drupal\db_update_diff_viewer\Controller\DatabaseUpdateDiffViewerController::list'
+  requirements:
+    _permission: 'administer site configuration'
+  options:
+    _admin_route: TRUE
+db_update_diff_viewer.diff:
+  path: '/admin/reports/db-updates-diff/{entity_type_id}/{type}/{field_name}'
+  defaults:
+    _title: 'Database updates difference'
+    _controller: '\Drupal\db_update_diff_viewer\Controller\DatabaseUpdateDiffViewerController::diff'
+  requirements:
+    _permission: 'administer site configuration'
+  options:
+    _admin_route: TRUE
